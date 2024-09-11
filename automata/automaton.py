@@ -1,6 +1,4 @@
-from html.parser import incomplete
-
-from automata.state import AutomatonState, By
+from automata.state import AutomatonState, By, MooreState, State
 from automata.transition import Transition
 
 
@@ -14,11 +12,17 @@ class Automaton:
         self.current_state = None
         self.current_states = None
         self.alphabet = set()
-        self.stack_alphabet = set()
+        self.stack_alphabet = set('|')
         self.allow_partial = allow_partial
+        self.inputs = []
 
-    def add_state(self, name, is_final=False):
-        state = AutomatonState(name, len(self.states), is_final)
+    def add_state(self, name, is_final=False, output=None):
+        if self.type == "MOORE":
+            state = MooreState(name, len(self.states)+1, output)
+        elif self.type in ["DFA", "NFA"]:
+            state = AutomatonState(name, len(self.states)+1, is_final)
+        else:
+            state = State(name, len(self.states)+1)
         state.transitions = {}
         self.states[name] = state
         if not self.initial_state:
@@ -37,18 +41,39 @@ class Automaton:
 
         return source_state, target_state
 
-    def add_transition(self, source, symbol, target, by=By.NAME):
-        if symbol not in self.alphabet:
-            self.alphabet.add(symbol)
+    def add_transition(self, source, symbols, target, by=By.NAME):
+        # Ensure alphabet contains all symbols
+        if isinstance(symbols, list):
+            for symbol in symbols:
+                if symbol not in self.alphabet:
+                    self.alphabet.add(symbol)
 
-        source_state, target_state = self._get_source_and_target(by, source, target)
+            source_state, target_state = self._get_source_and_target(by, source, target)
 
-        transition = Transition(symbol, source_state, target_state)
-        source_state.transitions[symbol] = transition
+            # Add a transition for each symbol in the list, individually
+            for symbol in symbols:
+                if symbol in source_state.transitions:
+                    raise ValueError(f"Duplicate transition found for symbol '{symbol}'")
+                transition = Transition(symbol, source_state, target_state)
+                source_state.transitions[symbol] = transition
+                source_state.used_symbols.add(symbol)
 
-        if symbol in source_state.used_symbols:
-            raise ValueError(f"Duplicate transition found for symbol '{symbol}'")
-        source_state.used_symbols.add(symbol)
+        else:
+            if symbols not in self.alphabet:
+                self.alphabet.add(symbols)
+
+            source_state, target_state = self._get_source_and_target(by, source, target)
+
+            transition = Transition(symbols, source_state, target_state)
+            source_state.transitions[symbols] = transition
+
+            if symbols in source_state.used_symbols:
+                raise ValueError(f"Duplicate transition found for symbol '{symbols}'")
+            source_state.used_symbols.add(symbols)
+
+
+    def add_input(self, simulation_input):
+        self.inputs.append(simulation_input)
 
     def set_initial_state(self, identifier, by=By.NAME):
         if by == By.NAME:
@@ -58,6 +83,8 @@ class Automaton:
         self.current_state = self.initial_state
 
     def check_automaton(self):
+        if self.type == "NFA":
+            return
         incomplete_states = {}
         for state in self.states.values():
             missing = self.alphabet - state.used_symbols
@@ -79,12 +106,11 @@ class Automaton:
     def auto_complete(self):
         if self.type == "NFA":
             return
-
-        uncomplete_states = {}
+        incomplete_states = {}
         for state in self.states.values():
-            left = self.alphabet - state.used_symbols
-            if left:
-                uncomplete_states[state] = left
+            missing = self.alphabet - state.used_symbols
+            if missing:
+                incomplete_states[state.name] = [symbol for symbol in missing]
 
 
 

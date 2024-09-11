@@ -1,4 +1,7 @@
-from automata.dfa import DFA
+import json
+
+from automata.automata_classes import DFA
+from automata.serialize.serialize_to_flaci import export_to_flaci
 
 """
 DFA example
@@ -15,7 +18,7 @@ dfa = DFA()
 
 # Define the alphabet
 # Technically not necessary, since the alphabet is inferred from transitions
-dfa.alphabet = {'0', '1', '2'}
+dfa.alphabet = {'0', '1'}
 
 # Add states to the DFA
 dfa.add_state('q0', is_final=True)
@@ -43,4 +46,3 @@ test4 = ['1', '0', '1', '0', '1', '1']
 # Process input
 result = dfa.process_input(test2)
 print(f"Result: {result}")
-
