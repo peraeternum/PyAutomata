@@ -23,7 +23,7 @@ nfa.add_state('q2', is_final=True)
 
 # Add transitions to the NFA
 nfa.add_epsilon_transition('q0', 'q1')
-nfa.add_transition('q0', 'a', 'q1')
+nfa.add_transition('q0', 'q1', 'a')
 nfa.add_epsilon_transition('q0', 'q2')
 
 input_list = ['a', 'b']

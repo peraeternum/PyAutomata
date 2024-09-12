@@ -1,7 +1,7 @@
 import json
 
 from automata.automata_classes import DFA
-from automata.serialize.serialize_to_flaci import export_to_flaci
+from automata.serialize.serialize_flaci import export_to_flaci
 
 """
 DFA example
@@ -25,10 +25,10 @@ dfa.add_state('q0', is_final=True)
 dfa.add_state('q1')
 
 # Add transitions to the DFA
-dfa.add_transition('q0', '0', 'q0')
-dfa.add_transition('q0', '1', 'q1')
-dfa.add_transition('q1', '0', 'q0')
-dfa.add_transition('q1', '1', 'q1')
+dfa.add_transition('q0', 'q0', '0')
+dfa.add_transition('q0', 'q1', '1')
+dfa.add_transition('q1', 'q0', '0')
+dfa.add_transition('q1', 'q1', '1')
 
 # Set the initial state of the DFA
 # Not necessary in this case, since the first state added is the initial state
@@ -46,3 +46,6 @@ test4 = ['1', '0', '1', '0', '1', '1']
 # Process input
 result = dfa.process_input(test2)
 print(f"Result: {result}")
+
+export_to_flaci(dfa)
+

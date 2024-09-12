@@ -16,12 +16,13 @@ def process_input(self, simulation_input):
 
     if self.type == 'DFA':
         return self.current_state.is_final
-    else:
+    elif self.type == "MOORE":
         return self.current_state.name, self.current_state.output if self.current_state.output is not None else None
-
+    elif self.type == "MEALY":
+        return self.current_state.name
 
 class DFA(Automaton):
-    def __init__(self, name='DFA', description=''):
+    def __init__(self, name='DFA', description='', allow_partial=False):
         super().__init__(name, description)
         self.type = 'DFA'
 
@@ -30,7 +31,7 @@ class DFA(Automaton):
 
 
 class MOORE(Automaton):
-    def __init__(self, name='MOORE', description=''):
+    def __init__(self, name='MOORE', description='', allow_partial=False):
         super().__init__(name, description)
         self.type = 'MOORE'
 
@@ -38,7 +39,7 @@ class MOORE(Automaton):
         return process_input(self, simulation_input)
 
 class MEALY(Automaton):
-    def __init__(self, name='MEALY', description=''):
+    def __init__(self, name='MEALY', description='', allow_partial=False):
         super().__init__(name, description)
         self.type = 'MEALY'
 

@@ -24,7 +24,6 @@ class MooreState(State):
         self.output = output  # Only used by Moore machines
 
 
-
 class By:
     NAME = 1
     ID = 2

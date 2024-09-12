@@ -1,5 +1,5 @@
 from automata.state import AutomatonState, By, MooreState, State
-from automata.transition import Transition
+from automata.transition import Transition, MealyTransition
 
 
 class Automaton:
@@ -16,13 +16,17 @@ class Automaton:
         self.allow_partial = allow_partial
         self.inputs = []
 
-    def add_state(self, name, is_final=False, output=None):
+    def add_state(self, name, state_id=None, is_final=False, output=None):
+        if state_id is None:
+            state_id = len(self.states) + 1
         if self.type == "MOORE":
-            state = MooreState(name, len(self.states)+1, output)
+            if output not in self.stack_alphabet:
+                self.stack_alphabet.add(output)
+            state = MooreState(name, state_id, output)
         elif self.type in ["DFA", "NFA"]:
-            state = AutomatonState(name, len(self.states)+1, is_final)
+            state = AutomatonState(name, state_id, is_final)
         else:
-            state = State(name, len(self.states)+1)
+            state = State(name, state_id)
         state.transitions = {}
         self.states[name] = state
         if not self.initial_state:
@@ -41,8 +45,7 @@ class Automaton:
 
         return source_state, target_state
 
-    def add_transition(self, source, symbols, target, by=By.NAME):
-        # Ensure alphabet contains all symbols
+    def add_transition(self, source, target, symbols, output=None, x=0, y=0, by=By.NAME):
         if isinstance(symbols, list):
             for symbol in symbols:
                 if symbol not in self.alphabet:
@@ -50,11 +53,26 @@ class Automaton:
 
             source_state, target_state = self._get_source_and_target(by, source, target)
 
-            # Add a transition for each symbol in the list, individually
             for symbol in symbols:
                 if symbol in source_state.transitions:
                     raise ValueError(f"Duplicate transition found for symbol '{symbol}'")
-                transition = Transition(symbol, source_state, target_state)
+                if self.type == "MEALY":
+                    if output not in self.stack_alphabet:
+                        self.stack_alphabet.add(output)
+                    transition = MealyTransition(
+                        symbol=symbol,
+                        source=source_state,
+                        target=target_state,
+                        output=output,
+                        x=x, y=y
+                    )
+                else:
+                    transition = Transition(
+                        symbol=symbol,
+                        source=source_state,
+                        target=target_state,
+                        x=x, y=y
+                    )
                 source_state.transitions[symbol] = transition
                 source_state.used_symbols.add(symbol)
 
@@ -64,13 +82,17 @@ class Automaton:
 
             source_state, target_state = self._get_source_and_target(by, source, target)
 
-            transition = Transition(symbols, source_state, target_state)
+            if self.type == "MEALY":
+                if output not in self.stack_alphabet:
+                    self.stack_alphabet.add(output)
+                transition = MealyTransition(symbols, source_state, target_state, output)
+            else:
+                transition = Transition(symbols, source_state, target_state)
             source_state.transitions[symbols] = transition
 
             if symbols in source_state.used_symbols:
                 raise ValueError(f"Duplicate transition found for symbol '{symbols}'")
             source_state.used_symbols.add(symbols)
-
 
     def add_input(self, simulation_input):
         self.inputs.append(simulation_input)
@@ -92,28 +114,19 @@ class Automaton:
                 incomplete_states[state.name] = [symbol for symbol in missing]
 
         if incomplete_states:
-            # Create a list of formatted strings for each state
             formatted_states = [
                 f"State {state}: {', '.join(map(str, missing_symbols))}"
                 for state, missing_symbols in incomplete_states.items()
             ]
-            # Join the formatted strings with a newline character
             error_message = "\n".join(formatted_states)
             raise ValueError(f"Automaton is incomplete:\n{error_message}")
-
         return True
 
     def auto_complete(self):
         if self.type == "NFA":
             return
-        incomplete_states = {}
         for state in self.states.values():
             missing = self.alphabet - state.used_symbols
             if missing:
-                incomplete_states[state.name] = [symbol for symbol in missing]
-
-
-
-
-
-
+                pass
+        # Logic for completing transitions would go here
