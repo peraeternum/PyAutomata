@@ -1,5 +1,4 @@
 from automata.automata_classes import MEALY
-from automata.serialize.serialize_flaci import export_to_flaci
 
 # Create a Mealy machine
 mealy = MEALY('Even number of ones', 'Checks if there is an even number of ones in the input')
@@ -32,4 +31,3 @@ result = mealy.process_input(input_string)
 print(result)
 
 # Export to FLACI
-export_to_flaci(mealy)

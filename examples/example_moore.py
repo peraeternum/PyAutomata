@@ -1,5 +1,4 @@
 from automata.automata_classes import MOORE
-from automata.serialize.serialize_flaci import export_to_flaci
 
 # Create a Moore machine
 moore = MOORE('Even number of ones', 'Checks if there is an even number of ones in the input')
@@ -31,6 +30,3 @@ input_string = '1010101'
 result = moore.process_input(input_string)
 
 print(result)
-
-# Export to FLACI
-export_to_flaci(moore)

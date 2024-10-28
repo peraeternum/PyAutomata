@@ -1,37 +1,26 @@
-"""
-NFA example
+# Initialize the NFA
+from automata.automata_classes import NFA
 
-Checks if a binary number is even
-
-Example using input string 'a, b'
-
-If alphabet has multichar symbols, use input list instead
-"""
-from automata.nfa import NFA
-
-# Create a NFA object
 nfa = NFA()
 
-# Define the alphabet
-# Technically not necessary, since the alphabet is inferred from transitions
+# Define the alphabet (optional, inferred from transitions)
 nfa.alphabet = ('a', 'b')
 
-# Add states to the NFA
-nfa.add_state('q0')
-nfa.add_state('q1')
-nfa.add_state('q2', is_final=True)
+# Add states
+nfa.add_state('q0')          # Start state
+nfa.add_state('q1')          # Intermediate state when 'a' is found
+nfa.add_state('q2', is_final=True)  # Final state when "ab" is found
 
-# Add transitions to the NFA
-nfa.add_epsilon_transition('q0', 'q1')
-nfa.add_transition('q0', 'q1', 'a')
-nfa.add_epsilon_transition('q0', 'q2')
+# Define transitions
+nfa.add_transition('q0', 'q0', 'a')  # Loop on 'a' in the start state to allow preceding 'a's
+nfa.add_transition('q0', 'q0', 'b')  # Loop on 'b' in the start state
+nfa.add_transition('q0', 'q1', 'a')  # Transition to 'q1' upon seeing 'a' for the first time
+nfa.add_transition('q1', 'q2', 'b')  # Transition to final state 'q2' upon seeing 'b' after 'a'
+nfa.add_transition('q2', 'q2', 'a')  # Allow further 'a's in final state
+nfa.add_transition('q2', 'q2', 'b')  # Allow further 'b's in final state
 
-input_list = ['a', 'b']
-input_string = ''
-
-# Process input
-result = nfa.process_input(input_string)
-print(result)
-
-
-
+# Test the NFA with some inputs
+input_strings = ["ab", "aab", "bbaa", "aabb", "ba"]
+for input_string in input_strings:
+    result = nfa.process_input(input_string)
+    print(f"Input '{input_string}' accepted? {result}")

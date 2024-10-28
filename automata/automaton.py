@@ -1,10 +1,10 @@
-from automata.state import AutomatonState, By, MooreState, State
+from automata.state import By, State, AutomatonState, MooreState
 from automata.transition import Transition, MealyTransition
 
 
 class Automaton:
-    def __init__(self, name, description, allow_partial=False):
-        self.type = None
+    def __init__(self, name, description, automaton_type, allow_partial=False):
+        self.type = automaton_type
         self.name = name
         self.description = description
         self.states = {}
@@ -15,6 +15,27 @@ class Automaton:
         self.stack_alphabet = set('|')
         self.allow_partial = allow_partial
         self.inputs = []
+        self.deterministic = True
+
+        if self.type not in ["DPDA", "NPDA"]:
+            self.add_transition = self._add_transition
+
+    def process_input(self, simulation_input):
+        print(f"Processing input '{simulation_input}' on automaton '{self.name}'")
+        for symbol in simulation_input:
+            if symbol not in self.alphabet:
+                return False
+            transition = self.current_state.transitions.get(symbol)
+            if not transition:
+                return False
+            self.current_state = transition.target
+
+        if self.type == 'DFA':
+            return self.current_state.is_final
+        elif self.type == "MOORE":
+            return self.current_state.name, self.current_state.output if self.current_state.output is not None else None
+        elif self.type == "MEALY":
+            return self.current_state.name
 
     def add_state(self, name, state_id=None, is_final=False, output=None):
         if state_id is None:
@@ -23,7 +44,7 @@ class Automaton:
             if output not in self.stack_alphabet:
                 self.stack_alphabet.add(output)
             state = MooreState(name, state_id, output)
-        elif self.type in ["DFA", "NFA"]:
+        elif self.type in ["DFA", "NFA", "NPDA", "DPDA"]:
             state = AutomatonState(name, state_id, is_final)
         else:
             state = State(name, state_id)
@@ -45,7 +66,7 @@ class Automaton:
 
         return source_state, target_state
 
-    def add_transition(self, source, target, symbols, output=None, x=0, y=0, by=By.NAME):
+    def _add_transition(self, source, target, symbols, output=None, x=0, y=0, by=By.NAME):
         if isinstance(symbols, list):
             for symbol in symbols:
                 if symbol not in self.alphabet:
@@ -54,8 +75,6 @@ class Automaton:
             source_state, target_state = self._get_source_and_target(by, source, target)
 
             for symbol in symbols:
-                if symbol in source_state.transitions:
-                    raise ValueError(f"Duplicate transition found for symbol '{symbol}'")
                 if self.type == "MEALY":
                     if output not in self.stack_alphabet:
                         self.stack_alphabet.add(output)
@@ -73,11 +92,22 @@ class Automaton:
                         target=target_state,
                         x=x, y=y
                     )
-                source_state.transitions[symbol] = transition
+
+                # For NFAs, store multiple transitions per symbol
+                if self.type == "NFA":
+                    if symbol not in source_state.transitions:
+                        source_state.transitions[symbol] = []
+                    source_state.transitions[symbol].append(transition)
+                else:
+                    # For DFAs and other types, keep the original behavior
+                    if symbol in source_state.transitions:
+                        raise ValueError(f"Duplicate transition found for symbol '{symbol}'")
+                    source_state.transitions[symbol] = transition
+
                 source_state.used_symbols.add(symbol)
 
         else:
-            if symbols not in self.alphabet:
+            if symbols not in self.alphabet:    
                 self.alphabet.add(symbols)
 
             source_state, target_state = self._get_source_and_target(by, source, target)
@@ -88,10 +118,18 @@ class Automaton:
                 transition = MealyTransition(symbols, source_state, target_state, output)
             else:
                 transition = Transition(symbols, source_state, target_state)
-            source_state.transitions[symbols] = transition
 
-            if symbols in source_state.used_symbols:
-                raise ValueError(f"Duplicate transition found for symbol '{symbols}'")
+            # For NFAs, store multiple transitions
+            if self.type == "NFA":
+                if symbols not in source_state.transitions:
+                    source_state.transitions[symbols] = []
+                source_state.transitions[symbols].append(transition)
+            else:
+                # For DFAs and other types, keep original behavior
+                if symbols in source_state.transitions:
+                    raise ValueError(f"Duplicate transition found for symbol '{symbols}'")
+                source_state.transitions[symbols] = transition
+
             source_state.used_symbols.add(symbols)
 
     def add_input(self, simulation_input):
@@ -105,8 +143,6 @@ class Automaton:
         self.current_state = self.initial_state
 
     def check_automaton(self):
-        if self.type == "NFA":
-            return
         incomplete_states = {}
         for state in self.states.values():
             missing = self.alphabet - state.used_symbols

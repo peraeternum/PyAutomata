@@ -1,7 +1,6 @@
 import json
 
 from automata.automata_classes import DFA
-from automata.serialize.serialize_flaci import export_to_flaci
 
 """
 DFA example
@@ -44,8 +43,6 @@ test3 = ['1', '0', '1', '0', '0', '0']
 test4 = ['1', '0', '1', '0', '1', '1']
 
 # Process input
-result = dfa.process_input(test2)
+result = dfa.process_input(test)
 print(f"Result: {result}")
-
-export_to_flaci(dfa)
 

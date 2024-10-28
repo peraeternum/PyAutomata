@@ -14,4 +14,4 @@ def flaci_to_python(flaci_json):
         f.write(flaci_to_python_template(flaci_json))
 
 
-flaci_to_python(r"C:\Users\benne\Downloads\Automaton_240808MooreParkscheinautomatLasse2.json")
+flaci_to_python(r"C:\Users\benne\Downloads\Automaton_KlammerMitVariablen(1).json")

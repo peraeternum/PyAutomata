@@ -60,6 +60,8 @@ def transition_list(state, machine_type):
         if machine_type == "MEALY":
             if transition.output not in transitions[key]["Labels"]:
                 transitions[key]["Labels"].append([str(transition.symbol), str(transition.output)])
+        elif machine_type in ["NPDA", "DPDA"]:
+            transitions[key]["Labels"].append([str(transition.stack_symbol), str(transition.symbol), transition.stack_push])
         else:
             if transition.symbol not in transitions[key]["Labels"]:
                 transitions[key]["Labels"].append(str(transition.symbol))
@@ -97,9 +99,14 @@ def flaci_to_python_template(flaci_json):
     for state in states:
         states_string += f'{class_name}.add_state("{state["Name"]}", "{(state["ID"])}", {state.get("Final", False)}, "{state.get("Output", "")}")\n'
         for transition in state["Transitions"]:
-            transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
-                                  f'{transition["Labels"]}, "{transition.get("Output", "")}", {transition["x"]}, '
-                                  f'{transition["y"]}, By.ID)\n')
+            if automaton_type in ["DKA", "NKA"]:
+                for label in transition["Labels"]:
+                    transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
+                                          f'"{label[1]}", "{label[0]}", {label[2]}, By.ID)\n')
+            else:
+                transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
+                                      f'{transition["Labels"]}, "{transition.get("Output", "")}", {transition["x"]}, '
+                                      f'{transition["y"]}, By.ID)\n')
 
     if automaton_type == "NEA":
         import_type = "from automata.nfa import NFA"
