@@ -20,7 +20,7 @@ nfa.add_transition('q2', 'q2', 'a')  # Allow further 'a's in final state
 nfa.add_transition('q2', 'q2', 'b')  # Allow further 'b's in final state
 
 # Test the NFA with some inputs
-input_strings = ["ab", "aab", "bbaa", "aabb", "ba"]
+input_strings = ["ab", "aab", "bbaab", "aabb", "ba"]
 for input_string in input_strings:
     result = nfa.process_input(input_string)
     print(f"Input '{input_string}' accepted? {result}")

@@ -1,6 +1,8 @@
 import json
+import re
 
 from automata.automata_classes import DFA
+from automata.serialize.automaton_template import create_file, automaton_python
 
 """
 DFA example
@@ -43,6 +45,9 @@ test3 = ['1', '0', '1', '0', '0', '0']
 test4 = ['1', '0', '1', '0', '1', '1']
 
 # Process input
-result = dfa.process_input(test)
+result = dfa.process_input(test2)
 print(f"Result: {result}")
 
+
+code = automaton_python(dfa)
+create_file(code, 'even_binary_number_dfa')

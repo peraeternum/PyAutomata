@@ -1,8 +1,11 @@
-from typing import List, Set, Tuple, Union
+from inspect import stack
+from typing import List, Set, Tuple, Union, Callable, Dict, Any
+
+from PIL.Image import composite
 
 from automata.automaton import Automaton
 from automata.state import By, State
-from automata.transition import PDATransition, Transition
+from automata.transition import PDATransition, Transition, MappingType, TuringTransition, MultiStackPDATransition
 
 
 class DFA(Automaton):
@@ -19,7 +22,7 @@ class MEALY(Automaton):
 
 
 class NFA(Automaton):
-    def __init__(self, name=None, description=None):
+    def __init__(self, name='NFA', description=''):
         super().__init__(name, description, 'NFA')
 
     # Add epsilon transitions for non-deterministic automata
@@ -97,15 +100,20 @@ class NFA(Automaton):
 
 
 class DPDA(Automaton):
-    def __init__(self, name='DPDA', description='', require_empty_stack=False):
+    def __init__(self, name='DPDA', description='', initial_stack=None, require_empty_stack=False):
         super().__init__(name, description, 'DPDA')
-        self.initial_stack: List[str] = ['|']  # Initialize with bottom marker
+        if initial_stack is None:
+            self.initial_stack: List[str] = ['|']  # Initialize with bottom marker
+        else:
+            self.initial_stack: List[str] = initial_stack
         self.stack: List[str] = self.initial_stack
-        self.stack_alphabet: Set[str] = set('|')  # Initialize with bottom marker
+        self.stack_alphabet: Set[str] = set(self.initial_stack)  # Initialize with bottom marker
         self.require_empty_stack = require_empty_stack
 
-    def add_transition(self, source: str, target: str, symbol: Union[str, List[str]],
-                       stack_symbol: str, stack_push: List[str], by=By.NAME) -> None:
+    def add_transition(self, source: str, target: str, symbol: Union[List[str], str],
+            stack_symbol: Union[List[str], str], stack_push: Union[List[str],
+            Tuple[Callable[..., any], Union[int, dict]]], by: By=By.NAME,
+            mapping_type: MappingType = MappingType.ONE_TO_ONE) -> None:
         """
         Add a transition for DPDA
 
@@ -116,49 +124,82 @@ class DPDA(Automaton):
             stack_symbol: Symbol to pop from stack ('' for no pop)
             stack_push: List of symbols to push onto stack (empty for no push)
             by: Whether to use state names or IDs
+            :param stack_symbol:
+            :param by:
+            :param stack_push:
+            :param symbol:
+            :param target:
+            :param source:
+            :param mapping_type:
         """
-        if isinstance(symbol, list):
-            for sym in symbol:
-                if sym not in self.alphabet and sym != "":
-                    self.alphabet.add(sym)
+        if isinstance(stack_symbol, str):
+            if stack_symbol == "":
+                raise ValueError("Empty stack symbol not allowed in PDA transitions")
+        elif any(symbol == "" for symbol in stack_symbol):
+            raise ValueError("Empty stack symbol not allowed in PDA transitions")
 
-                source_state, target_state = self._get_source_and_target(by, source, target)
+        if isinstance(symbol, list) or isinstance(stack_symbol, list):
+            if mapping_type == MappingType.ALL_TO_ALL:
+                # All-to-All mapping: Create transitions for every combination
+                for sym in symbol:
+                    for stack_sym in stack_symbol:
+                        self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
 
-                # Add stack symbols to stack alphabet
-                self.stack_alphabet.add(stack_symbol)
-                self.stack_alphabet.update(stack_push)
+            elif mapping_type == MappingType.ONE_TO_ONE:
+                # One-to-One mapping: Only valid if both lists are of the same length
+                if len(symbol) != len(stack_symbol):
+                    raise ValueError("symbol and stack_symbol lists must be of the same length for ONE_TO_ONE mapping")
 
-                transition = PDATransition(sym, source_state, target_state,
-                                           stack_symbol, stack_push)
-
-                # Ensure determinism - only one transition per (input symbol, stack symbol) pair
-                key = (sym, stack_symbol)
-                if key in source_state.transitions:
-                    raise ValueError(f"Duplicate transition for input '{sym}' and stack symbol '{stack_symbol}'")
-
-                source_state.transitions[key] = transition
-                source_state.used_symbols.add(sym)
-
+                for sym, stack_sym in zip(symbol, stack_symbol):
+                    self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
         else:
-            if symbol not in self.alphabet and symbol != "":
-                self.alphabet.add(symbol)
+            # Handle cases where symbol or stack_symbol is a single item
+            if not isinstance(symbol, list):
+                symbol = [symbol]
+            if not isinstance(stack_symbol, list):
+                stack_symbol = [stack_symbol]
 
-            source_state, target_state = self._get_source_and_target(by, source, target)
+            for sym in symbol:
+                for stack_sym in stack_symbol:
+                    self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
 
+    def _add_single_transition(self, source: str, target: str, symbol: str, stack_symbol: str,
+            stack_push: Union[List[str], Tuple[Callable[..., any]], Union[int, dict]], by=By.NAME) -> None:
+        if symbol not in self.alphabet and symbol != "":
+            self.alphabet.add(symbol)
+
+        source_state, target_state = self._get_source_and_target(by, source, target)
+
+        if symbol == "" and source_state.transitions:
+            raise ValueError("Epsilon transition cannot be added to a state with existing transitions")
+
+        self.stack_alphabet.add(stack_symbol)
+
+        if isinstance(stack_push, list):
             # Add stack symbols to stack alphabet
-            self.stack_alphabet.add(stack_symbol)
             self.stack_alphabet.update(stack_push)
 
             transition = PDATransition(symbol, source_state, target_state,
                                        stack_symbol, stack_push)
+        elif isinstance(stack_push[0], Callable):
+            stack_push, repeat = stack_push[0], stack_push[1]
+            stack_push = stack_push(repeat, symbol, stack_symbol)
 
-            # Ensure determinism - only one transition per (input symbol, stack symbol) pair
-            key = (symbol, stack_symbol)
-            if key in source_state.transitions:
-                raise ValueError(f"Duplicate transition for input '{symbol}' and stack symbol '{stack_symbol}' at state '{source_state.name}'")
+            self.stack_alphabet.update(stack_push)
 
-            source_state.transitions[key] = transition
-            source_state.used_symbols.add(symbol)
+            transition = PDATransition(symbol, source_state, target_state,
+                                       stack_symbol, stack_push)
+        else:
+            raise ValueError("Invalid stack_push argument. Must be a list of symbols or a Push object")
+
+
+        # Ensure determinism - only one transition per (input symbol, stack symbol) pair
+        key = (symbol, stack_symbol)
+        if key in source_state.transitions:
+            raise ValueError(f"Duplicate transition for input '{symbol}' and stack symbol '{stack_symbol}'")
+
+        source_state.transitions[key] = transition
+        source_state.used_symbols.add(symbol)
 
     def follow_epsilon_transitions(self):
         """Follow all possible epsilon transitions from current state"""
@@ -190,7 +231,6 @@ class DPDA(Automaton):
             require_empty_stack: Override default empty stack requirement
         """
 
-        print(f"Starting process with input: {simulation_input}")
         self.stack = self.initial_stack  # Reset stack to initial state
         self.current_state = self.initial_state  # Reset to initial state
         input_pos = 0  # Track position in input string
@@ -200,55 +240,40 @@ class DPDA(Automaton):
                              if require_empty_stack is not None
                              else self.require_empty_stack)
 
-        print(
-            f"Initial state: {self.current_state.name}, Stack: {self.stack}, Require empty stack: {check_empty_stack}")
-
         # Follow initial epsilon transitions
         self.follow_epsilon_transitions()
-        print(f"State after initial epsilon transitions: {self.current_state.name}, Stack: {self.stack}")
 
         while input_pos < len(simulation_input):
             symbol = simulation_input[input_pos]
-            print(f"Processing symbol: '{symbol}' at position {input_pos}")
 
             if symbol not in self.alphabet:
-                print(f"Symbol '{symbol}' not in alphabet. Rejecting input.")
                 return False
 
             # Try to find a valid transition
             stack_top = self.stack[-1] if self.stack else '|'
-            print(f"Top of stack: '{stack_top}'")
 
             transition = self.current_state.transitions.get((symbol, stack_top))
             if not transition:
-                print(f"No transition found for (symbol: '{symbol}', stack_top: '{stack_top}'). Rejecting input.")
                 return False
 
-            print(f"Transition found: {transition}. Moving to state: {transition.target.name}")
-
             # Perform stack operations
-            if transition.stack_symbol != '':  # If we need to pop
-                if not self.stack or self.stack[-1] != transition.stack_symbol:
-                    print(
-                        f"Stack top '{self.stack[-1] if self.stack else None}' does not match required symbol '{transition.stack_symbol}'. Rejecting input.")
-                    return False
-                print(f"Popping stack top: '{self.stack.pop()}'")
+            if not self.stack or self.stack[-1] != transition.stack_symbol:
+                return False
+
+            self.stack.pop()
 
             # Push new symbols in reverse order
             for push_symbol in reversed(transition.stack_push):
                 self.stack.append(push_symbol)
-                print(f"Pushed '{push_symbol}' onto stack. New stack: {self.stack}")
 
             self.current_state = transition.target
             input_pos += 1  # Move to next input symbol
 
             # Follow any epsilon transitions after processing input symbol
             self.follow_epsilon_transitions()
-            print(f"State after epsilon transitions: {self.current_state.name}, Stack: {self.stack}")
 
         # Follow any remaining epsilon transitions after input is consumed
         self.follow_epsilon_transitions()
-        print(f"Final state after input: {self.current_state.name}, Stack: {self.stack}")
 
         # Accept if:
         # 1. All input was consumed (input_pos == len(simulation_input))
@@ -257,43 +282,88 @@ class DPDA(Automaton):
         acceptance = (input_pos == len(simulation_input) and
                       self.current_state.is_final and
                       (not check_empty_stack or len(self.stack) == 1))
-        print(f"Acceptance criteria: Input consumed={input_pos == len(simulation_input)}, "
-              f"Final state={self.current_state.is_final}, "
-              f"Stack empty={len(self.stack) == 1 if check_empty_stack else 'N/A'}")
-        print(f"Result: {'Accepted' if acceptance else 'Rejected'}")
 
+        self.output[simulation_input] = {
+            "state": self.current_state.name,
+            "accepted": acceptance
+        }
         return acceptance
 
 
 class NPDA(Automaton):
-    def __init__(self, name='NPDA', description='', require_empty_stack=False):
+    def __init__(self, name='NPDA', description='', initial_stack=None, require_empty_stack=False):
         super().__init__(name, description, 'NPDA')
-        self.initial_stack: List[str] = ['|']  # Initialize with bottom marker
-        self.stack: List[str] = self.initial_stack.copy()  # Initialize with bottom marker
-        self.stack_alphabet: Set[str] = {'|'}  # Initialize with bottom marker
+        if initial_stack is None:
+            self.initial_stack = ['|'] # Initialize with bottom marker
+        else:
+            self.initial_stack: List[str] = initial_stack # Initialize custom initial stack
+        self.stack: List[str] = self.initial_stack.copy()
+        self.stack_alphabet: Set[str] = set(self.initial_stack)  # Initialize with bottom marker
         self.require_empty_stack = require_empty_stack
         self.current_states: Set[Tuple[State, Tuple[str, ...]]] = set()
 
     def add_transition(self, source: str, target: str, symbol: Union[str, List[str]],
-                       stack_symbol: str, stack_push: List[str], by=By.NAME) -> None:
-        if isinstance(symbol, list):
-            for sym in symbol:
-                self._add_single_transition(source, target, sym, stack_symbol, stack_push, by)
+                       stack_symbol: Union[str, List[str]], stack_push: Union[List[str],
+            Tuple[Callable[..., any], Union[int, dict]]], by=By.NAME,
+                       mapping_type: MappingType=MappingType.ONE_TO_ONE) -> None:
+        if isinstance(stack_symbol, str):
+            if stack_symbol == "":
+                raise ValueError("Empty stack symbol not allowed in PDA transitions")
+        elif any(symbol == "" for symbol in stack_symbol):
+            raise ValueError("Empty stack symbol not allowed in PDA transitions")
+
+        if isinstance(symbol, list) or isinstance(stack_symbol, list):
+            if mapping_type == MappingType.ALL_TO_ALL:
+                # All-to-All mapping: Create transitions for every combination
+                for sym in symbol:
+                    for stack_sym in stack_symbol:
+                        self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
+
+            elif mapping_type == MappingType.ONE_TO_ONE:
+                # One-to-One mapping: Only valid if both lists are of the same length
+                if len(symbol) != len(stack_symbol):
+                    raise ValueError("symbol and stack_symbol lists must be of the same length for ONE_TO_ONE mapping")
+
+                for sym, stack_sym in zip(symbol, stack_symbol):
+                    self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
         else:
-            self._add_single_transition(source, target, symbol, stack_symbol, stack_push, by)
+            # Handle cases where symbol or stack_symbol is a single item
+            if not isinstance(symbol, list):
+                symbol = [symbol]
+            if not isinstance(stack_symbol, list):
+                stack_symbol = [stack_symbol]
+
+            for sym in symbol:
+                for stack_sym in stack_symbol:
+                    self._add_single_transition(source, target, sym, stack_sym, stack_push, by)
 
     def _add_single_transition(self, source: str, target: str, symbol: str,
-                               stack_symbol: str, stack_push: List[str], by=By.NAME) -> None:
+                               stack_symbol: str, stack_push: Union[List[str], Tuple[Callable[..., any]], Union[int, dict]]
+                               , by=By.NAME) -> None:
         if symbol not in self.alphabet and symbol != "":
             self.alphabet.add(symbol)
 
         source_state, target_state = self._get_source_and_target(by, source, target)
 
         self.stack_alphabet.add(stack_symbol)
-        self.stack_alphabet.update(stack_push)
 
-        transition = PDATransition(symbol, source_state, target_state,
-                                   stack_symbol, stack_push)
+        if isinstance(stack_push, list):
+            self.stack_alphabet.update(stack_push)
+
+            transition = PDATransition(symbol, source_state, target_state,
+                                       stack_symbol, stack_push)
+
+        elif isinstance(stack_push[0], Callable):
+            stack_push, repeat = stack_push[0], stack_push[1]
+            stack_push = stack_push(repeat, symbol, stack_symbol)
+
+            self.stack_alphabet.update(stack_push)
+
+            transition = PDATransition(symbol, source_state, target_state,
+                                       stack_symbol, stack_push)
+        else:
+            raise ValueError("Invalid stack_push argument. Must be an empty list or a list of symbols or a Push object")
+
 
         if symbol not in source_state.transitions:
             source_state.transitions[symbol] = []
@@ -367,7 +437,119 @@ class NPDA(Automaton):
 
             self.current_states = next_states
 
-        return any(
+        acceptance = any(
             state.is_final and (not check_empty_stack or len(stack) == 1)
             for state, stack in self.current_states
         )
+
+        self.output[simulation_input] = {
+            "states": [state.name for state, _ in self.current_states],
+            "accepted": acceptance
+        }
+        return acceptance
+
+
+class Turing(Automaton):
+    def __init__(self, name='Turing Machine', description='', blank_symbol='|'):
+        super().__init__(name, description, 'Turing')
+        self.tape = []
+        self.head_position = 1
+        self.blank_symbol = blank_symbol
+
+    def add_transition(self, source: str, target: str, tape_symbol: Union[str, List[str]],
+                       tape_write: Union[str, List[str]], move: str, by=By.NAME,
+                       mapping_type: MappingType=MappingType.ONE_TO_ONE) -> None:
+        if isinstance(tape_symbol, list) and isinstance(tape_write, list):
+            if mapping_type == MappingType.ALL_TO_ALL:
+                # All-to-All mapping: Create transitions for every combination
+                for sym in tape_symbol:
+                    for write in tape_write:
+                        self._add_single_transition(source, target, sym, write, move, by)
+            elif mapping_type == MappingType.ONE_TO_ONE:
+                # One-to-One mapping: Only valid if both lists are of the same length
+                if len(tape_symbol) != len(tape_write):
+                    raise ValueError("tape_symbol and tape_write lists must be of the same length for ONE_TO_ONE mapping")
+                for sym, write in zip(tape_symbol, tape_write):
+                    self._add_single_transition(source, target, sym, write, move, by)
+
+        else:
+            # Handle cases where tape_symbol or tape_write is a single item
+            if not isinstance(tape_symbol, list):
+                tape_symbol = [tape_symbol]
+            if not isinstance(tape_write, list):
+                tape_write = [tape_write]
+
+            for sym in tape_symbol:
+                for write in tape_write:
+                    self._add_single_transition(source, target, sym, write, move, by)
+
+    def _add_single_transition(self, source: str, target: str, tape_symbol: str,
+                               tape_write: str, move: str, by=By.NAME) -> None:
+        if tape_symbol not in self.stack_alphabet and tape_symbol != "":
+            self.stack_alphabet.add(tape_symbol)
+        if tape_write not in self.stack_alphabet and tape_write != "":
+            self.stack_alphabet.add(tape_write)
+
+        source_state, target_state = self._get_source_and_target(by, source, target)
+
+        if tape_symbol in source_state.transitions:
+            raise ValueError(f"Duplicate transition for input '{tape_symbol}'")
+
+        transition = TuringTransition(source_state, target_state, tape_symbol, tape_write, move)
+
+        source_state.transitions[tape_symbol] = transition
+        source_state.used_symbols.add(tape_symbol)
+
+
+    def process_input(self, simulation_input: Union[List[str], str]) -> tuple[bool, list[str]]:
+        self.tape = list(self.blank_symbol) + list(simulation_input) + list(self.blank_symbol)
+        self.head_position = 1
+
+        iteration = 0
+        while True:
+
+            if iteration > 1000:
+                return False, self.tape
+            tape_symbol = self.tape[self.head_position]
+            transition = self.current_state.transitions.get(tape_symbol)
+
+            if not transition:
+                return self.current_state.is_final, self.tape
+
+            self.tape[self.head_position] = transition.tape_write
+            self.head_position += 1 if transition.move == 'R' else -1 if transition.move == 'L' else 0
+
+            if self.head_position < 0:
+                self.tape.insert(0, self.blank_symbol)
+                self.head_position = 0
+            elif self.head_position >= len(self.tape):
+                self.tape.append(self.blank_symbol)
+
+            self.current_state = transition.target
+            iteration += 1
+
+
+class MultiStackPDA(Automaton):
+    def __init__(self, stack_amount=2, name='Multi-Stack PDA', deterministic=True, initial_stacks: List[List[str]]=None, description='', require_empty_stack=False):
+        super().__init__(name, description, 'MSPDA')
+        if initial_stacks is None:
+            self.initial_stacks: List[List[str]] = [['|'] for _ in range(stack_amount)]
+        else:
+            if len(initial_stacks) != stack_amount:
+                raise ValueError("Number of initial stacks does not match stack_amount")
+            self.initial_stacks: List[List[str]] = initial_stacks
+        self.stacks: List[List[str]] = [stack.copy() for stack in self.initial_stacks]
+        self.stack_alphabet: Set[str] = set([symbol for stack in self.initial_stacks for symbol in stack])
+        self.deterministic = deterministic
+        self.stack_amount = stack_amount
+        self.stack_names = [f"stack_{i}" for i in range(stack_amount)]
+        if not self.deterministic:
+            self.current_state = None
+
+
+class MultiTapeTuring(Automaton):
+    def __init__(self, name='Multi-Tape Turing Machine', description='', blank_symbol='|'):
+        super().__init__(name, description, 'Multi-Tape Turing')
+        self.tapes = []
+        self.head_positions = [1]
+        self.blank_symbol = blank_symbol

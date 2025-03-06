@@ -9,9 +9,9 @@ def export_to_flaci(automaton):
         f.write(json.dumps(flaci_template(automaton), indent=4))
 
 
-def flaci_to_python(flaci_json):
-    with open('flaci_automaton.py', 'w', encoding='utf-8') as f:
+def flaci_to_python(flaci_json, name="flaci_automaton"):
+    with open(f'{name}.py', 'w', encoding='utf-8') as f:
         f.write(flaci_to_python_template(flaci_json))
 
 
-flaci_to_python(r"C:\Users\benne\Downloads\Automaton_KlammerMitVariablen(1).json")
+# flaci_to_python(r"C:\Users\benne\Downloads\Automaton_BinaryAdditionNew.json", "BinaryAddition")

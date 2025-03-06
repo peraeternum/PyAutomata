@@ -9,13 +9,22 @@ class State:
         self.x = random.randint(0, 1000)
         self.y = random.randint(0, 1000)
         self.radius = 30
-        self.is_final = False
+
+    def clear(self):
+        self.transitions = {}
+        self.used_symbols = set()
 
 class AutomatonState(State):
     def __init__(self, name, state_id, is_final=False):
         super().__init__(name, state_id)
         self.is_final = is_final  # Only used by DFA and NFA
         self.epsilon_transitions = {}  # Only used by NFA
+
+
+    def clear(self):
+        self.transitions = {}
+        self.used_symbols = set()
+        self.is_final = False
 
 
 class MooreState(State):

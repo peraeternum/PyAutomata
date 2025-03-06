@@ -16,25 +16,45 @@ class Automaton:
         self.allow_partial = allow_partial
         self.inputs = []
         self.deterministic = True
+        self.output = {}
 
-        if self.type not in ["DPDA", "NPDA"]:
+        if self.type not in ["DPDA", "NPDA", "Turing"]:
             self.add_transition = self._add_transition
 
     def process_input(self, simulation_input):
         print(f"Processing input '{simulation_input}' on automaton '{self.name}'")
+        if self.type not in ["MOORE", "MEALY"]:
+            self.output[simulation_input] = {}
+            self.output[simulation_input]["output"] = ""
+        else:
+            self.output[simulation_input] = {}
+            self.output[simulation_input]["output"] = []
+
         for symbol in simulation_input:
+            if self.type == "MOORE":
+                if self.current_state.output:
+                    self.output[simulation_input]["output"].append(self.current_state.output)
             if symbol not in self.alphabet:
                 return False
             transition = self.current_state.transitions.get(symbol)
+            if self.type == "MEALY":
+                if transition.output:
+                    self.output[simulation_input]["output"].append(transition.output)
             if not transition:
                 return False
             self.current_state = transition.target
 
         if self.type == 'DFA':
+            self.output[simulation_input] = {
+                "state": self.current_state.name,
+                "accepted": self.current_state.is_final
+            }
             return self.current_state.is_final
         elif self.type == "MOORE":
+            self.output[simulation_input]["state"] = self.current_state.name
             return self.current_state.name, self.current_state.output if self.current_state.output is not None else None
         elif self.type == "MEALY":
+            self.output[simulation_input] = self.current_state.name
             return self.current_state.name
 
     def add_state(self, name, state_id=None, is_final=False, output=None):
@@ -44,7 +64,7 @@ class Automaton:
             if output not in self.stack_alphabet:
                 self.stack_alphabet.add(output)
             state = MooreState(name, state_id, output)
-        elif self.type in ["DFA", "NFA", "NPDA", "DPDA"]:
+        elif self.type in ["DFA", "NFA", "NPDA", "DPDA", "Turing"]:
             state = AutomatonState(name, state_id, is_final)
         else:
             state = State(name, state_id)

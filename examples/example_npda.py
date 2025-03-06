@@ -1,4 +1,8 @@
 from automata.automata_classes import NPDA
+from automata.serialize.automaton_template import create_file, automaton_python
+from automata.serialize.serialize_flaci import export_to_flaci
+
+# NPDA for a^n b^n
 
 npda = NPDA()
 
@@ -18,4 +22,7 @@ npda.add_transition("q2", "q2", "b", "X", [])    # Pop X for subsequent 'b's
 npda.add_transition("q0", "q2", "", "", [])      # Epsilon transition for empty string
 
 # Test
-print(npda.process_input("aabb"))  # Should print processing message and return True
+print(npda.process_input("aaabbb"))  # Should print processing message and return True
+
+code = automaton_python(npda)
+create_file(code, 'anbn_npda')

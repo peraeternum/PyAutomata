@@ -9,12 +9,13 @@ def flaci_template(automaton):
         "MEALY": "MEALY",
         "MOORE": "MOORE",
         "DPDA": "DKA",
-        "NPDA": "NKA"
+        "NPDA": "NKA",
+        "Turing": "TM"
     }
 
     automaton_states = [
         {
-            "ID": state.id,
+            "ID": int(state.id),
             "Name": state.name,
             "x": state.x,
             "y": state.y,
@@ -22,10 +23,19 @@ def flaci_template(automaton):
             "Radius": state.radius,
             "Transitions": transition_list(state, automaton.type),
             "Start": state == automaton.initial_state,
-            "Output": state.output if hasattr(state, "output") else None
+            **({"Output": state.output} if automaton.type == "MOORE" and hasattr(state, "output") else {})
         }
         for state in automaton.states.values()
     ]
+
+    if automaton.type == "Turing":
+        stack_alphabet = [automaton.blank_symbol] + sorted(set(automaton.stack_alphabet) - {automaton.blank_symbol})
+    elif automaton.type in ["NPDA", "DPDA"]:
+        stack_alphabet = [automaton.initial_stack[0]] + sorted(set(automaton.stack_alphabet) -
+            {automaton.initial_stack[0]})
+    else: stack_alphabet = list(automaton.stack_alphabet)
+
+    print(stack_alphabet)
 
     automaton_dict = {
         "name": automaton.name,
@@ -35,36 +45,71 @@ def flaci_template(automaton):
             "acceptCache": [],
             "simulationInput": automaton.inputs[0] if automaton.inputs else [],
             "Alphabet": list(automaton.alphabet),
-            "StackAlphabet": list(automaton.stack_alphabet),
+            "StackAlphabet": stack_alphabet,
             "States": automaton_states,
             "lastInputs": [],
-            "allowPartial": automaton.allow_partial
         }
     }
 
+    if automaton.type not in ["NPDA", "DPDA", "Turing", "NFA"]:
+        automaton_dict["allowPartial"] = automaton.allow_partial
     return automaton_dict
 
 
 def transition_list(state, machine_type):
     transitions = defaultdict(lambda: {
-        "Source": None, "Target": None, "x": None, "y": None, "Labels": []
+        "Source": -1, "Target": -1, "x": None, "y": None, "Labels": []
     })
-    for transition in state.transitions.values():
-        key = transition.target.name
-        if transitions[key]["Source"] is None:
-            transitions[key]["Source"] = transition.source.id
-            transitions[key]["Target"] = transition.target.id
-            transitions[key]["x"] = transition.x
-            transitions[key]["y"] = transition.y
 
-        if machine_type == "MEALY":
-            if transition.output not in transitions[key]["Labels"]:
-                transitions[key]["Labels"].append([str(transition.symbol), str(transition.output)])
-        elif machine_type in ["NPDA", "DPDA"]:
-            transitions[key]["Labels"].append([str(transition.stack_symbol), str(transition.symbol), transition.stack_push])
+    for symbol, trans_list in state.transitions.items():
+        # Handle case where transitions is a list
+        if isinstance(trans_list, list):
+            for transition in trans_list:
+                key = transition.target.name
+                if transitions[key]["Source"] == -1:
+                    transitions[key]["Source"] = int(transition.source.id)
+                    transitions[key]["Target"] = int(transition.target.id)
+                    transitions[key]["x"] = getattr(transition, 'x', None)
+                    transitions[key]["y"] = getattr(transition, 'y', None)
+
+                if machine_type == "MEALY":
+                    if transition.output not in transitions[key]["Labels"]:
+                        transitions[key]["Labels"].append([str(symbol), str(transition.output)])
+                elif machine_type in ["NPDA", "DPDA"]:
+                    label = [str(transition.stack_symbol), str(symbol), transition.stack_push]
+                    if label not in transitions[key]["Labels"]:
+                        transitions[key]["Labels"].append(label)
+                elif machine_type == "Turing":
+                    label = [str(transition.tape_symbol), str(transition.tape_write), transition.move]
+                    if symbol not in transitions[key]["Labels"]:
+                        transitions[key]["Labels"].append(label)
+                else:
+                    if symbol not in transitions[key]["Labels"]:
+                        transitions[key]["Labels"].append(str(symbol))
         else:
-            if transition.symbol not in transitions[key]["Labels"]:
-                transitions[key]["Labels"].append(str(transition.symbol))
+            # Handle single transition case
+            transition = trans_list
+            key = transition.target.name
+            if transitions[key]["Source"] == -1:
+                transitions[key]["Source"] = int(transition.source.id)
+                transitions[key]["Target"] = int(transition.target.id)
+                transitions[key]["x"] = getattr(transition, 'x', None)
+                transitions[key]["y"] = getattr(transition, 'y', None)
+
+            if machine_type == "MEALY":
+                if transition.output not in transitions[key]["Labels"]:
+                    transitions[key]["Labels"].append([str(symbol), str(transition.output)])
+            elif machine_type in ["NPDA", "DPDA"]:
+                label = [str(transition.stack_symbol), str(symbol), transition.stack_push]
+                if label not in transitions[key]["Labels"]:
+                    transitions[key]["Labels"].append(label)
+            elif machine_type == "Turing":
+                label = [str(transition.tape_symbol), str(transition.tape_write), transition.move]
+                if symbol not in transitions[key]["Labels"]:
+                    transitions[key]["Labels"].append(label)
+            else:
+                if symbol not in transitions[key]["Labels"]:
+                    transitions[key]["Labels"].append(str(symbol))
 
     return list(transitions.values())
 
@@ -76,7 +121,8 @@ def flaci_to_python_template(flaci_json):
         "MEALY": "MEALY",
         "MOORE": "MOORE",
         "DKA": "DPDA",
-        "NKA": "NPDA"
+        "NKA": "NPDA",
+        "TM": "Turing"
     }
 
     with open(flaci_json, 'r', encoding='utf-8-sig') as f:
@@ -103,6 +149,12 @@ def flaci_to_python_template(flaci_json):
                 for label in transition["Labels"]:
                     transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
                                           f'"{label[1]}", "{label[0]}", {label[2]}, By.ID)\n')
+
+            elif automaton_type == "TM":
+                for label in transition["Labels"]:
+                    transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
+                                          f'"{label[0]}", "{label[1]}", "{label[2]}", By.ID)\n')
+
             else:
                 transition_string += (f'{class_name}.add_transition("{transition["Source"]}", "{transition["Target"]}", '
                                       f'{transition["Labels"]}, "{transition.get("Output", "")}", {transition["x"]}, '
@@ -110,6 +162,8 @@ def flaci_to_python_template(flaci_json):
 
     if automaton_type == "NEA":
         import_type = "from automata.nfa import NFA"
+    elif automaton_type == "TM":
+        import_type = "from automata.automata_classes import Turing"
     else:
         import_type = f"from automata.automata_classes import {automaton_types.get(automaton_type, automaton_type)}"
 
