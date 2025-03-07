@@ -1,5 +1,0 @@
-General:
-Serialize State classes into custom json format
-Add automaton completion
-
-Fix Mealy FLACI behaviour

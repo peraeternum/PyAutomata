@@ -500,6 +500,14 @@ class Turing(Automaton):
         source_state.transitions[tape_symbol] = transition
         source_state.used_symbols.add(tape_symbol)
 
+    def loop(self, source:str, tape_symbol:str, move:str, by=By.NAME):
+        self.add_transition(source, source, tape_symbol, tape_symbol, move, by)
+
+    def loop_right(self, source:str, tape_symbol:str, by=By.NAME):
+        self.add_transition(source, source, tape_symbol, tape_symbol, 'R', by)
+
+    def loop_left(self, source:str, tape_symbol:str, by=By.NAME):
+        self.add_transition(source, source, tape_symbol, tape_symbol, 'L', by)
 
     def process_input(self, simulation_input: Union[List[str], str]) -> tuple[bool, list[str]]:
         self.tape = list(self.blank_symbol) + list(simulation_input) + list(self.blank_symbol)
