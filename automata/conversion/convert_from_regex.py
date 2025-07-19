@@ -1,6 +1,6 @@
+from typing import Dict, Optional
+
 from automata.automaton import Automaton
-from automata.transition import Transition
-from typing import Dict, Optional, Set
 
 
 class AutomatonToRegexConverter:
@@ -9,7 +9,7 @@ class AutomatonToRegexConverter:
         self.transition_regex: Dict[str, Dict[str, str]] = {}  # Regex between states
 
     def initialize_regex_transitions(self):
-        """Set up initial regex table from automaton transitions."""
+        """Set up the initial regex table from automaton transitions."""
         # Initialize an empty regex for each state pair
         for state_name in self.automaton.states:
             self.transition_regex[state_name] = {
@@ -33,7 +33,6 @@ class AutomatonToRegexConverter:
 
     def eliminate_state(self, state_name: str):
         """Eliminate a state by updating regex transitions."""
-        state = self.automaton.states[state_name]
         loop_regex = self.transition_regex[state_name][state_name]  # R_xx (self-loop)
 
         # Update transitions for each pair (p, q) with paths passing through `state_name`

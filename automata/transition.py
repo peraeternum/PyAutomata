@@ -23,7 +23,7 @@ class MealyTransition(Transition):
 class PDATransition(Transition):
     """Transition class for PDAs with stack operations"""
     stack_symbol: str  # Symbol to read from stack
-    stack_push: List[str]  # Symbols to push onto stack (empty list means no push)
+    stack_push: List[str]  # Symbols to push onto stack (an empty list means no push)
 
     def __init__(self, symbol: str, source: 'State', target: 'State',
                  stack_symbol: str, stack_push: List[str], x: int = 0, y: int = 0):
